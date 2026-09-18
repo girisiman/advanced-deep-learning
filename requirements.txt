@@ -1,0 +1,15 @@
+# CPU-only PyTorch wheels (no CUDA download, much smaller & faster install)
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch
+torchvision
+torchaudio
+numpy
+matplotlib
+pandas
+scikit-learn
+jupyter
+tqdm
+
+# Install with: pip install -r requirements.txt
+# (Only needed if you're not using conda / environment.yml)

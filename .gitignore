@@ -1,0 +1,30 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+
+# Virtual environments (in case you ever use venv instead of conda)
+.venv/
+env/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VSCode
+.vscode/*
+!.vscode/settings.json
+
+# Datasets & trained model artifacts — too large / regenerable, don't commit
+data/
+**/data/
+*.pth
+*.pt
+*.ckpt
+checkpoints/
+wandb/
+
+# OS junk
+.DS_Store
+Thumbs.db
