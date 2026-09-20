@@ -195,7 +195,7 @@ def show_generations(
 def main() -> None:
     """Load data, train LSTM (and optional RNN), report test metrics."""
     args = parse_args()
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("device:", device)
 
     loaders, vocab, stats = build_dataloaders(
