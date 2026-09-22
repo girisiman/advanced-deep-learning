@@ -391,20 +391,54 @@ FLORES_SPLIT = "test"
 
 from datasets import load_dataset
 
-def load_flores(max_pairs=None, split="devtest"):
-    """Load Nepali-English pairs from FLORES+."""
-    ne = load_dataset("openlanguagedata/flores_plus", "npi_Deva", split=split)
-    en = load_dataset("openlanguagedata/flores_plus", "eng_Latn", split=split)
+FLORES_CACHE = DATA_DIR / "flores_en_ne_devtest.jsonl"
+FLORES_TAR_URL = "https://dl.fbaipublicfiles.com/nllb/flores200_dataset.tar.gz"
 
-    n = min(len(ne), len(en))
-    if max_pairs is not None:
-        n = min(n, max_pairs)
+
+def load_flores(split="devtest", max_pairs=None, cache_path=None, force=False):
+    """Load FLORES-200 English–Nepali pairs without a gated Hub dataset.
+
+    Downloads the official tarball once, then reads
+    eng_Latn and npi_Deva files. Same sentence index = same sentence.
+
+    Args:
+        split: 'dev' or 'devtest'.
+        max_pairs: Optional cap.
+        cache_path: Local JSONL cache.
+        force: Ignore cache.
+
+    Returns:
+        List of (english, nepali).
+    """
+    import tarfile
+    import tempfile
+    import urllib.request
+
+    if cache_path is None:
+        cache_path = FLORES_CACHE
+    cache_path = Path(cache_path)
+    if cache_path.exists() and not force:
+        pairs = _read_jsonl(cache_path)
+        print("flores cache", cache_path, "n=", len(pairs))
+        return pairs[:max_pairs] if max_pairs else pairs
+
+    print("downloading FLORES-200 tarball")
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tar_path = DATA_DIR / "flores200_dataset.tar.gz"
+    if not tar_path.exists() or force:
+        urllib.request.urlretrieve(FLORES_TAR_URL, tar_path)
+
+    with tarfile.open(tar_path, "r:gz") as tar:
+        en_name = f"flores200_dataset/{split}/eng_Latn.{split}"
+        ne_name = f"flores200_dataset/{split}/npi_Deva.{split}"
+        en_lines = tar.extractfile(en_name).read().decode("utf-8").splitlines()
+        ne_lines = tar.extractfile(ne_name).read().decode("utf-8").splitlines()
 
     pairs = []
-    for i in range(n):
-        pairs.append({
-            "src": ne[i]["text"],
-            "tgt": en[i]["text"],
-        })
-    return pairs
-
+    for english, nepali in zip(en_lines, ne_lines):
+        english, nepali = english.strip(), nepali.strip()
+        if english and nepali:
+            pairs.append((english, nepali))
+    _write_jsonl(cache_path, pairs)
+    print("flores saved", cache_path, "n=", len(pairs))
+    return pairs[:max_pairs] if max_pairs else pairs
