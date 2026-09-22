@@ -388,29 +388,22 @@ FLORES_CONFIG = "neen"
 FLORES_SPLIT = "test"
 
 
-def load_flores(split=FLORES_SPLIT, max_pairs=None, cache_path=None, force=False):
-    """Load public FLORES v1 EN–NE (not gated FLORES-200)."""
-    if cache_path is None:
-        cache_path = FLORES_CACHE
-    cache_path = Path(cache_path)
-    if cache_path.exists() and not force:
-        pairs = _read_jsonl(cache_path)
-        print("flores cache", cache_path, "n=", len(pairs))
-        return pairs[:max_pairs] if max_pairs else pairs
+from datasets import load_dataset
 
-    from datasets import load_dataset
+def load_flores(max_pairs=None, split="devtest"):
+    """Load Nepali-English pairs from FLORES+."""
+    ne = load_dataset("openlanguagedata/flores_plus", "npi_Deva", split=split)
+    en = load_dataset("openlanguagedata/flores_plus", "eng_Latn", split=split)
 
-    print("downloading", FLORES_DATASET, FLORES_CONFIG, split)
-    ds = load_dataset(FLORES_DATASET, FLORES_CONFIG, split=split)
+    n = min(len(ne), len(en))
+    if max_pairs is not None:
+        n = min(n, max_pairs)
+
     pairs = []
-    for row in ds:
-        trans = row.get("translation", row)
-        english = str(trans.get("en", "")).strip()
-        nepali = str(trans.get("ne", "")).strip()
-        if english and nepali:
-            pairs.append((english, nepali))
-    if len(pairs) < 10:
-        raise RuntimeError(f"FLORES sample too small: {len(pairs)}")
-    _write_jsonl(cache_path, pairs)
-    print("flores saved", cache_path, "n=", len(pairs))
-    return pairs[:max_pairs] if max_pairs else pairs
+    for i in range(n):
+        pairs.append({
+            "src": ne[i]["text"],
+            "tgt": en[i]["text"],
+        })
+    return pairs
+
