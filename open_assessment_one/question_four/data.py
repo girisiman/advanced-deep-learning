@@ -383,22 +383,13 @@ def load_opus_sample(max_pairs=DEFAULT_SAMPLE_SIZE, cache_path=OPUS_CACHE, force
     return pairs
 
 FLORES_CACHE = DATA_DIR / "flores_en_ne_devtest.jsonl"
-FLORES_DATASET = "facebook/flores"
-FLORES_CONFIG = "eng_Latn-npi_Deva"
+FLORES_DATASET = "facebook-llama/flores"
+FLORES_CONFIG = "neen"
+FLORES_SPLIT = "test"
 
 
-def load_flores(split="devtest", max_pairs=None, cache_path=None, force=False):
-    """Load FLORES-200 English–Nepali pairs.
-
-    Args:
-        split: 'dev' or 'devtest'. Exam uses devtest.
-        max_pairs: Optional cap for a first score.
-        cache_path: Local JSONL cache.
-        force: Ignore cache.
-
-    Returns:
-        List of (english, nepali).
-    """
+def load_flores(split=FLORES_SPLIT, max_pairs=None, cache_path=None, force=False):
+    """Load public FLORES v1 EN–NE (not gated FLORES-200)."""
     if cache_path is None:
         cache_path = FLORES_CACHE
     cache_path = Path(cache_path)
@@ -413,8 +404,9 @@ def load_flores(split="devtest", max_pairs=None, cache_path=None, force=False):
     ds = load_dataset(FLORES_DATASET, FLORES_CONFIG, split=split)
     pairs = []
     for row in ds:
-        english = str(row.get("sentence_eng_Latn", "")).strip()
-        nepali = str(row.get("sentence_npi_Deva", "")).strip()
+        trans = row.get("translation", row)
+        english = str(trans.get("en", "")).strip()
+        nepali = str(trans.get("ne", "")).strip()
         if english and nepali:
             pairs.append((english, nepali))
     if len(pairs) < 10:
