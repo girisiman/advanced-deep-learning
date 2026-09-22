@@ -382,3 +382,43 @@ def load_opus_sample(max_pairs=DEFAULT_SAMPLE_SIZE, cache_path=OPUS_CACHE, force
     print("opus saved", cache_path, "n=", len(pairs))
     return pairs
 
+FLORES_CACHE = DATA_DIR / "flores_en_ne_devtest.jsonl"
+FLORES_DATASET = "facebook/flores"
+FLORES_CONFIG = "eng_Latn-npi_Deva"
+
+
+def load_flores(split="devtest", max_pairs=None, cache_path=None, force=False):
+    """Load FLORES-200 English–Nepali pairs.
+
+    Args:
+        split: 'dev' or 'devtest'. Exam uses devtest.
+        max_pairs: Optional cap for a first score.
+        cache_path: Local JSONL cache.
+        force: Ignore cache.
+
+    Returns:
+        List of (english, nepali).
+    """
+    if cache_path is None:
+        cache_path = FLORES_CACHE
+    cache_path = Path(cache_path)
+    if cache_path.exists() and not force:
+        pairs = _read_jsonl(cache_path)
+        print("flores cache", cache_path, "n=", len(pairs))
+        return pairs[:max_pairs] if max_pairs else pairs
+
+    from datasets import load_dataset
+
+    print("downloading", FLORES_DATASET, FLORES_CONFIG, split)
+    ds = load_dataset(FLORES_DATASET, FLORES_CONFIG, split=split)
+    pairs = []
+    for row in ds:
+        english = str(row.get("sentence_eng_Latn", "")).strip()
+        nepali = str(row.get("sentence_npi_Deva", "")).strip()
+        if english and nepali:
+            pairs.append((english, nepali))
+    if len(pairs) < 10:
+        raise RuntimeError(f"FLORES sample too small: {len(pairs)}")
+    _write_jsonl(cache_path, pairs)
+    print("flores saved", cache_path, "n=", len(pairs))
+    return pairs[:max_pairs] if max_pairs else pairs
