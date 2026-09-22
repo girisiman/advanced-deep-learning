@@ -1,6 +1,7 @@
 """EN↔NE bitext for Question 4."""
 
 from __future__ import annotations
+from datasets import load_dataset
 
 PREFIX_EN2NE = "[en2ne]"
 PREFIX_NE2EN = "[ne2en]"
