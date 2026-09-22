@@ -429,8 +429,9 @@ def load_flores(split="devtest", max_pairs=None, cache_path=None, force=False):
         urllib.request.urlretrieve(FLORES_TAR_URL, tar_path)
 
     with tarfile.open(tar_path, "r:gz") as tar:
-        en_name = f"flores200_dataset/{split}/eng_Latn.{split}"
-        ne_name = f"flores200_dataset/{split}/npi_Deva.{split}"
+        names = tar.getnames()
+        en_name = next(n for n in names if n.endswith(f"/eng_Latn.{split}"))
+        ne_name = next(n for n in names if n.endswith(f"/npi_Deva.{split}"))
         en_lines = tar.extractfile(en_name).read().decode("utf-8").splitlines()
         ne_lines = tar.extractfile(ne_name).read().decode("utf-8").splitlines()
 
