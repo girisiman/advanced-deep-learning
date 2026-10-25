@@ -1,32 +1,25 @@
 """
-UNet-style convolutional autoencoder for MNIST (and later CelebA).
+UNet-style convolutional autoencoder for MNIST.
 
-Implements encoder–decoder with skip connections.
-Same class is used for both clean autoencoding and denoising.
+Encoder–decoder with skip connections.
+Same class used for clean autoencoding and denoising.
 """
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class ConvBlock(nn.Module):
-    """Two conv layers with ReLU (and optional BatchNorm)."""
+    """Two 3×3 conv layers with ReLU and optional BatchNorm."""
 
     def __init__(self, in_ch: int, out_ch: int, use_bn: bool = True):
         super().__init__()
-        layers = [
-            nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, bias=not use_bn),
-            nn.ReLU(inplace=True),
-        ]
-        if use_bn:
-            layers.insert(1, nn.BatchNorm2d(out_ch))
-        layers += [
-            nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1, bias=not use_bn),
-            nn.ReLU(inplace=True),
-        ]
-        if use_bn:
-            layers.insert(-1, nn.BatchNorm2d(out_ch))
+        layers = []
+        for i, (cin, cout) in enumerate([(in_ch, out_ch), (out_ch, out_ch)]):
+            layers.append(nn.Conv2d(cin, cout, kernel_size=3, padding=1, bias=not use_bn))
+            if use_bn:
+                layers.append(nn.BatchNorm2d(cout))
+            layers.append(nn.ReLU(inplace=True))
         self.block = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -34,7 +27,7 @@ class ConvBlock(nn.Module):
 
 
 class DownBlock(nn.Module):
-    """ConvBlock + MaxPool. Returns (pooled, skip)."""
+    """ConvBlock followed by MaxPool. Returns (pooled, skip)."""
 
     def __init__(self, in_ch: int, out_ch: int, use_bn: bool = True):
         super().__init__()
@@ -47,9 +40,9 @@ class DownBlock(nn.Module):
 
 
 class UpBlock(nn.Module):
-    """Upsample + concat skip + ConvBlock.
+    """Upsample (ConvTranspose), concat skip, then ConvBlock.
 
-    Handles the 7→14 and 14→28 transitions for MNIST.
+    Centres-crops the skip if spatial sizes differ (MNIST 28 is not a power of 2).
     """
 
     def __init__(self, in_ch: int, skip_ch: int, out_ch: int, use_bn: bool = True):
@@ -59,11 +52,15 @@ class UpBlock(nn.Module):
 
     def forward(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
         x = self.up(x)
-        # MNIST 7→14 is exact; if sizes ever differ we centre-crop the skip
         if x.shape[-2:] != skip.shape[-2:]:
             dh = skip.shape[-2] - x.shape[-2]
             dw = skip.shape[-1] - x.shape[-1]
-            skip = skip[:, :, dh // 2 : dh // 2 + x.shape[-2], dw // 2 : dw // 2 + x.shape[-1]]
+            skip = skip[
+                :,
+                :,
+                dh // 2 : dh // 2 + x.shape[-2],
+                dw // 2 : dw // 2 + x.shape[-1],
+            ]
         x = torch.cat([x, skip], dim=1)
         return self.conv(x)
 
@@ -73,9 +70,9 @@ class UNetAE(nn.Module):
     Lightweight UNet autoencoder.
 
     Args:
-        in_channels: 1 for MNIST, 3 for CelebA later
-        base_ch: starting channel count (default 32 → 32/64/128)
-        use_bn: BatchNorm in the conv blocks
+        in_channels: 1 for MNIST
+        base_ch: starting channel count (default 32 → 32 / 64 / 128)
+        use_bn: BatchNorm inside conv blocks
     """
 
     def __init__(self, in_channels: int = 1, base_ch: int = 32, use_bn: bool = True):
@@ -83,21 +80,21 @@ class UNetAE(nn.Module):
         c1, c2, c3 = base_ch, base_ch * 2, base_ch * 4
 
         # Encoder
-        self.down1 = DownBlock(in_channels, c1, use_bn)   # 28 → 14, skip 32
-        self.down2 = DownBlock(c1, c2, use_bn)             # 14 → 7,  skip 64
-        self.bottleneck = ConvBlock(c2, c3, use_bn)        # 7×7, 128
+        self.down1 = DownBlock(in_channels, c1, use_bn)  # 28 → 14, skip c1
+        self.down2 = DownBlock(c1, c2, use_bn)            # 14 → 7,  skip c2
+        self.bottleneck = ConvBlock(c2, c3, use_bn)       # 7×7, c3
 
         # Decoder
-        self.up2 = UpBlock(c3, c2, c2, use_bn)             # 7 → 14, cat 64 → 64
-        self.up1 = UpBlock(c2, c1, c1, use_bn)             # 14 → 28, cat 32 → 32
+        self.up2 = UpBlock(c3, c2, c2, use_bn)            # 7 → 14
+        self.up1 = UpBlock(c2, c1, c1, use_bn)            # 14 → 28
         self.final = nn.Conv2d(c1, in_channels, kernel_size=1)
         self.out_act = nn.Sigmoid()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Encoder
-        x, s1 = self.down1(x)          # s1: 28×28 (before pool) or after conv
-        x, s2 = self.down2(x)          # s2: 14×14
-        x = self.bottleneck(x)         # 7×7
+        x, s1 = self.down1(x)
+        x, s2 = self.down2(x)
+        x = self.bottleneck(x)
 
         # Decoder with skips
         x = self.up2(x, s2)
@@ -115,9 +112,8 @@ def add_gaussian_noise(x: torch.Tensor, sigma: float = 0.2) -> torch.Tensor:
 
 
 if __name__ == "__main__":
-    # quick shape check
     model = UNetAE(in_channels=1, base_ch=32)
     x = torch.randn(2, 1, 28, 28)
     y = model(x)
-    print(y.shape)  # should be (2, 1, 28, 28)
-    print(sum(p.numel() for p in model.parameters()) / 1e6, "M params")
+    print("output shape:", y.shape)  # (2, 1, 28, 28)
+    print("params (M):", round(sum(p.numel() for p in model.parameters()) / 1e6, 3))

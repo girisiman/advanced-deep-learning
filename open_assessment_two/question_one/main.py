@@ -1,24 +1,23 @@
 """
 Train a UNet Autoencoder (and Denoising Autoencoder) on MNIST.
 
-Usage (local smoke test, adl-cpu):
+Local smoke (adl-cpu):
   python -u main.py --mode ae  --epochs 1 --max-batches 20
   python -u main.py --mode dae --epochs 1 --max-batches 20
 
-Full train (Colab):
-  !python main.py --mode ae  --epochs 15
-  !python main.py --mode dae --epochs 15
+Colab full train:
+  !python -u main.py --mode ae  --epochs 15
+  !python -u main.py --mode dae --epochs 15
 """
 
 import argparse
-import os
 from pathlib import Path
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
-from torchvision.utils import save_image, make_grid
+from torchvision.utils import make_grid, save_image
 
 from model import UNetAE, add_gaussian_noise
 
@@ -36,9 +35,15 @@ def get_dataloaders(batch_size: int, val_frac: float = 0.1, data_root: str = "./
     n_train = len(full_train) - n_val
     train_set, val_set = random_split(full_train, [n_train, n_val])
 
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
-    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
-    test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
+    train_loader = DataLoader(
+        train_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True
+    )
+    val_loader = DataLoader(
+        val_set, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True
+    )
+    test_loader = DataLoader(
+        test_set, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True
+    )
     return train_loader, val_loader, test_loader
 
 
@@ -89,7 +94,6 @@ def save_reconstructions(model, loader, device, mode: str, sigma: float, out_pat
     x = x[:n_show].to(device)
     inp = add_gaussian_noise(x, sigma) if mode == "dae" else x
     recon = model(inp)
-    # original | input (noisy if dae) | recon
     grid = make_grid(torch.cat([x, inp, recon], dim=0), nrow=n_show)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     save_image(grid, out_path)
@@ -125,20 +129,33 @@ def main():
     best_path = ckpt_dir / f"unet_{args.mode}_best.pt"
 
     for epoch in range(1, args.epochs + 1):
-        tr_loss = train_one_epoch(model, train_loader, optim, device, args.mode, args.sigma, args.max_batches)
+        tr_loss = train_one_epoch(
+            model, train_loader, optim, device, args.mode, args.sigma, args.max_batches
+        )
         va_loss = evaluate(model, val_loader, device, args.mode, args.sigma, args.max_batches)
         print(f"epoch {epoch:02d}  train_mse={tr_loss:.5f}  val_mse={va_loss:.5f}")
 
         if va_loss < best_val:
             best_val = va_loss
-            torch.save({"model": model.state_dict(), "epoch": epoch, "val_mse": va_loss, "args": vars(args)}, best_path)
+            torch.save(
+                {
+                    "model": model.state_dict(),
+                    "epoch": epoch,
+                    "val_mse": va_loss,
+                    "args": vars(args),
+                },
+                best_path,
+            )
             print(f"  saved best → {best_path}")
 
-    # final test + visual
     test_mse = evaluate(model, test_loader, device, args.mode, args.sigma)
     print(f"test_mse={test_mse:.5f}")
     save_reconstructions(
-        model, test_loader, device, args.mode, args.sigma,
+        model,
+        test_loader,
+        device,
+        args.mode,
+        args.sigma,
         Path(f"recon_{args.mode}.png"),
     )
 
