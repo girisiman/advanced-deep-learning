@@ -30,9 +30,9 @@ def get_dataloaders(batch_size: int, img_size: int = 64, data_root: str = "./dat
         transforms.CenterCrop(img_size),
         transforms.ToTensor(),
     ])
-    train_set = datasets.CelebA(data_root, split="train", download=True, transform=tfm)
-    val_set = datasets.CelebA(data_root, split="valid", download=True, transform=tfm)
-    test_set = datasets.CelebA(data_root, split="test", download=True, transform=tfm)
+    train_set = datasets.CelebA(data_root, split="train", download=False, transform=tfm)
+    val_set = datasets.CelebA(data_root, split="valid", download=False, transform=tfm)
+    test_set = datasets.CelebA(data_root, split="test", download=False, transform=tfm)
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
     val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
